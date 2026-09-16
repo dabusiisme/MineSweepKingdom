@@ -1,0 +1,14 @@
+{
+  "ver": "1.1.50",
+  "importer": "prefab",
+  "imported": true,
+  "uuid": "1f2f4dcd-4622-4c36-a305-83604b74aebe",
+  "files": [
+    ".json"
+  ],
+  "subMetas": {},
+  "userData": {
+    "syncNodeName": "CellPrefab",
+    "hasIcon": false
+  }
+}
