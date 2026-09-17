@@ -3,7 +3,8 @@
  * 1~3 星 + 战绩 + 再来一局
  */
 import { _decorator, Component, Node, Label, Sprite, tween, Vec3, UIOpacity, Layers, UITransform, Color } from "cc";
-import { TextureFactory } from "./TextureFactory";
+import { TextureLibrary } from "./TextureLibrary";
+import { AudioManager } from "../core/AudioManager";
 const { ccclass, property } = _decorator;
 
 @ccclass("ResultPopup")
@@ -41,12 +42,7 @@ export class ResultPopup extends Component {
             if (ptf) ptf.setContentSize(pw, ph);
             const ps = panel.getComponent(Sprite);
             if (ps) {
-                ps.sizeMode = Sprite.SizeMode.CUSTOM;
-                const sf = TextureFactory.panel(pw, ph);
-                if (sf) {
-                    ps.spriteFrame = sf;
-                    ps.color = new Color(255, 255, 255, 255);
-                } else {
+                if (!TextureLibrary.apply(ps, "panel", pw, ph)) {
                     ps.color = new Color(250, 247, 238, 255);
                 }
             }
@@ -59,12 +55,7 @@ export class ResultPopup extends Component {
             if (tf) tf.setContentSize(STAR, STAR);
             const sprite = star.getComponent(Sprite);
             if (sprite) {
-                sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-                const sf = TextureFactory.icon("star", STAR);
-                if (sf) {
-                    sprite.spriteFrame = sf;
-                    sprite.color = new Color(255, 255, 255, 255);
-                } else {
+                if (!TextureLibrary.apply(sprite, "icon_star", STAR, STAR)) {
                     sprite.color = new Color(255, 206, 92, 255);
                 }
             }
@@ -97,12 +88,7 @@ export class ResultPopup extends Component {
         if (tf) tf.setContentSize(w, h);
         const sprite = btn.getComponent(Sprite);
         if (sprite) {
-            sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-            const sf = TextureFactory.button(w, h, "primary");
-            if (sf) {
-                sprite.spriteFrame = sf;
-                sprite.color = new Color(255, 255, 255, 255);
-            } else {
+            if (!TextureLibrary.apply(sprite, "button_primary", w, h)) {
                 sprite.color = new Color(196, 224, 240, 255);
             }
         }
@@ -165,7 +151,7 @@ export class ResultPopup extends Component {
         return m + ":" + (s < 10 ? "0" : "") + s;
     }
 
-    onRetryClicked() { this.onRetry?.(); this.hide(); }
-    onHomeClicked() { this.onHome?.(); this.hide(); }
+    onRetryClicked() { AudioManager.play("click"); this.onRetry?.(); this.hide(); }
+    onHomeClicked() { AudioManager.play("click"); this.onHome?.(); this.hide(); }
     public hide(): void { this.node.active = false; }
 }

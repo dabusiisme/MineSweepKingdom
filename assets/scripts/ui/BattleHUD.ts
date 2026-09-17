@@ -3,7 +3,8 @@
  * 顶部状态条：倒计时 | 剩余雷数 | 暂停按钮
  */
 import { _decorator, Component, Node, Label, Sprite, Color, Layers, UITransform } from "cc";
-import { TextureFactory } from "./TextureFactory";
+import { TextureLibrary } from "./TextureLibrary";
+import { AudioManager } from "../core/AudioManager";
 const { ccclass, property } = _decorator;
 
 @ccclass("BattleHUD")
@@ -51,12 +52,7 @@ export class BattleHUD extends Component {
             if (tf) tf.setContentSize(w, BattleHUD.BAR_H);
             const sprite = barBG.getComponent(Sprite);
             if (sprite) {
-                sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-                const sf = TextureFactory.bar(w, BattleHUD.BAR_H);
-                if (sf) {
-                    sprite.spriteFrame = sf;
-                    sprite.color = new Color(255, 255, 255, 255);
-                } else {
+                if (!TextureLibrary.apply(sprite, "bar", w, BattleHUD.BAR_H)) {
                     sprite.color = new Color(198, 214, 232, 255);
                 }
             }
@@ -104,12 +100,10 @@ export class BattleHUD extends Component {
         if (tf) tf.setContentSize(BattleHUD.BTN, BattleHUD.BTN);
         const sprite = btn.getComponent(Sprite);
         if (sprite) {
-            sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-            const sf = TextureFactory.button(BattleHUD.BTN, BattleHUD.BTN, tone);
-            if (sf) {
-                sprite.spriteFrame = sf;
-                sprite.color = new Color(255, 255, 255, 255);
-            } else {
+            const tex = tone === "primary" ? "button_primary"
+                      : tone === "disabled" ? "button_disabled"
+                      : "button_neutral";
+            if (!TextureLibrary.apply(sprite, tex, BattleHUD.BTN, BattleHUD.BTN)) {
                 sprite.color = tone === "disabled"
                     ? new Color(226, 231, 238, 255)
                     : new Color(255, 255, 255, 255);
@@ -194,7 +188,7 @@ export class BattleHUD extends Component {
         if (this.flagCountLabel) this.flagCountLabel.string = "🚩 0";
     }
     /** 同一个按钮：暂停时点它就是继续 */
-    onPauseClicked() { this.togglePause(); }
-    onContinueClicked() { if (this._isPaused) this.togglePause(); }
-    onRestartClicked() { this.onRestart?.(); }
+    onPauseClicked() { AudioManager.play("click"); this.togglePause(); }
+    onContinueClicked() { if (this._isPaused) { AudioManager.play("click"); this.togglePause(); } }
+    onRestartClicked() { AudioManager.play("click"); this.onRestart?.(); }
 }

@@ -4,7 +4,7 @@
  */
 import {
     _decorator, Component, Node, view, Layers, director,
-    Sprite, Label, UITransform, UIOpacity, Color,
+    Sprite, Label, UITransform, UIOpacity, Color, AudioSource,
 } from "cc";
 import { Board } from "../core/Board";
 import { GameManager } from "../core/GameManager";
@@ -13,7 +13,7 @@ import { BoardView } from "./BoardView";
 import { BattleHUD } from "./BattleHUD";
 import { ResultPopup } from "./ResultPopup";
 import { AudioManager } from "../core/AudioManager";
-import { TextureFactory } from "./TextureFactory";
+import { TextureLibrary } from "./TextureLibrary";
 const { ccclass, property } = _decorator;
 
 @ccclass("BattleScene")
@@ -57,7 +57,10 @@ export class BattleScene extends Component {
         if (this.hud) this.hud.node.walk(n => { n.layer = UI_2D; });
         if (this.resultPopup) this.resultPopup.node.walk(n => { n.layer = UI_2D; });
 
-        this._ensureBackdrop();
+        // 音效挂在 BattleRoot 上，随场景存活；不额外建常驻节点
+        const source = this.node.getComponent(AudioSource) ?? this.node.addComponent(AudioSource);
+        AudioManager.init(source);
+
     }
 
     private _findInScene(scene: Node | null, ctor: any): any {
@@ -81,6 +84,7 @@ export class BattleScene extends Component {
             mask.addComponent(UITransform);
             const sprite = mask.addComponent(Sprite);
             sprite.sizeMode = Sprite.SizeMode.CUSTOM;
+            TextureLibrary.apply(sprite, "white");
             sprite.color = new Color(232, 240, 250, 210);
             const opacity = mask.addComponent(UIOpacity);
             opacity.opacity = 255;
@@ -103,7 +107,13 @@ export class BattleScene extends Component {
         }
     }
 
-    start() { this._startGame("medium"); }
+    async start() {
+        // 先等素材就位，再建背景和棋盘，避免出现没有 spriteFrame 的空帧
+        await TextureLibrary.load();
+        await AudioManager.load();
+        this._ensureBackdrop();
+        this._startGame("medium");
+    }
 
     public _startGame(difficultyId: string): void {
         this._mode = new ClassicMode();
@@ -194,12 +204,7 @@ export class BattleScene extends Component {
             if (tf) tf.setContentSize(w, h);
             const sprite = this._bg.getComponent(Sprite);
             if (sprite) {
-                sprite.sizeMode = Sprite.SizeMode.CUSTOM;
-                const sf = TextureFactory.background(w, h);
-                if (sf) {
-                    sprite.spriteFrame = sf;
-                    sprite.color = new Color(255, 255, 255, 255);
-                } else {
+                if (!TextureLibrary.apply(sprite, "background", w, h)) {
                     sprite.color = new Color(226, 237, 250, 255);
                 }
             }
@@ -222,7 +227,7 @@ export class BattleScene extends Component {
         if (this.hud && this._mode && this._mode.board) {
             this.hud.updateMineCount(this._mode.board.getRemainingMines(), this._mode.board.getFlaggedCount());
         }
-        AudioManager.instance.play('reveal');
+        AudioManager.play('reveal');
     }
 
     private _onCellFlag(event: any): void {
@@ -230,7 +235,7 @@ export class BattleScene extends Component {
         if (this._mode) {
             const cell = this._mode.board?.getCell(row, col);
             this._mode.toggleFlag(row, col);
-            AudioManager.instance.play(cell?.isFlagged() ? 'flag' : 'unflag');
+            AudioManager.play(cell?.isFlagged() ? 'flag' : 'unflag');
         }
         this.boardView?.updateAllCells();
         if (this.hud && this._mode && this._mode.board) {
@@ -242,12 +247,12 @@ export class BattleScene extends Component {
         const { row, col } = event;
         if (this._mode) this._mode.chord(row, col);
         this.boardView?.updateAllCells();
-        AudioManager.instance.play('chord');
+        AudioManager.play('chord');
     }
 
     private _onGameWin(): void {
         if (this.hud) this.hud.stopTimer();
-        AudioManager.instance.play('win');
+        AudioManager.play('win');
         if (this.resultPopup && this._mode && this._mode.board) {
             const duration = this._getElapsed();
             this.resultPopup.show(true, duration, this._mode.difficulty?.name || "", this._mode.board.getFlaggedCount());
@@ -256,7 +261,7 @@ export class BattleScene extends Component {
 
     private _onGameOver(): void {
         if (this.hud) this.hud.stopTimer();
-        AudioManager.instance.play('explosion');
+        AudioManager.play('explosion');
         if (this.resultPopup && this._mode && this._mode.board) {
             const duration = this._getElapsed();
             this.resultPopup.show(false, duration, this._mode.difficulty?.name || "", this._mode.board.getFlaggedCount());

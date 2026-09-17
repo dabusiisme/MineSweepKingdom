@@ -1,127 +1,61 @@
 /**
- * AudioManager 音效管理器
- * 使用 Web Audio API 生成简单音效，无需音频文件
+ * AudioManager 音效管理
+ * 音频文件放在 assets/resources/audio/ 下（预先生成好的 wav），这里负责加载和播放。
+ * 加载不到或没有 AudioSource 时静默跳过，不影响游戏逻辑。
  */
-import { _decorator, Component, director, Node } from 'cc';
+import { AudioClip, AudioSource } from "cc";
+import { loadRes } from "./AssetLoader";
 
-const { ccclass } = _decorator;
+export type SoundName =
+    | "reveal" | "flag" | "unflag" | "chord"
+    | "win" | "explosion" | "click";
 
-type SoundType = 'reveal' | 'flag' | 'unflag' | 'explosion' | 'win' | 'chord' | 'click';
+const SOUNDS: SoundName[] = ["reveal", "flag", "unflag", "chord", "win", "explosion", "click"];
+const MUTE_KEY = "msk_muted";
 
-@ccclass('AudioManager')
-export class AudioManager extends Component {
-    private static _instance: AudioManager | null = null;
-    private _ctx: AudioContext | null = null;
-    private _muted: boolean = false;
+export class AudioManager {
+    private static _clips: Partial<Record<SoundName, AudioClip>> = {};
+    private static _source: AudioSource | null = null;
+    private static _muted: boolean = false;
 
-    public static get instance(): AudioManager {
-        if (!this._instance) {
-            const node = new Node('AudioManager');
-            this._instance = node.addComponent(AudioManager);
-            director.addPersistRootNode(node);
+    /** 由场景把 AudioSource 交进来（挂在 BattleRoot 上，随场景存活） */
+    public static init(source: AudioSource): void {
+        this._source = source;
+        try {
+            this._muted = localStorage.getItem(MUTE_KEY) === "1";
+        } catch {
+            this._muted = false;
         }
-        return this._instance;
     }
 
-    onLoad() {
-        this._muted = (typeof localStorage !== 'undefined' && localStorage.getItem('msk_muted') === '1');
+    public static async load(): Promise<void> {
+        const missing: string[] = [];
+        for (const name of SOUNDS) {
+            const clip = await loadRes<AudioClip>(`audio/${name}`, AudioClip);
+            if (clip) this._clips[name] = clip;
+            else missing.push(name);
+        }
+        if (missing.length) {
+            console.warn("[AudioManager] 以下音效没加载到：" + missing.join(", "));
+        }
     }
 
-    private _ensureCtx(): AudioContext | null {
-        if (typeof window === 'undefined') return null;
-        if (!this._ctx) {
-            const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-            if (!AC) return null;
-            this._ctx = new AC();
-        }
-        if (this._ctx.state === 'suspended') {
-            this._ctx.resume();
-        }
-        return this._ctx;
-    }
+    public static get muted(): boolean { return this._muted; }
 
-    public setMuted(muted: boolean): void {
+    public static setMuted(muted: boolean): void {
         this._muted = muted;
-        if (typeof localStorage !== 'undefined') {
-            localStorage.setItem('msk_muted', muted ? '1' : '0');
+        try {
+            localStorage.setItem(MUTE_KEY, muted ? "1" : "0");
+        } catch {
+            /* 隐私模式下写不了，忽略 */
         }
     }
 
-    public get muted(): boolean { return this._muted; }
-
-    public play(sound: SoundType): void {
+    public static play(name: SoundName, volume: number = 1): void {
         if (this._muted) return;
-        const ctx = this._ensureCtx();
-        if (!ctx) return;
-        switch (sound) {
-            case 'reveal': this._playTone(ctx, 600, 0.08, 'sine', 0.15); break;
-            case 'flag': this._playTone(ctx, 880, 0.06, 'square', 0.1); break;
-            case 'unflag': this._playTone(ctx, 440, 0.06, 'square', 0.1); break;
-            case 'explosion':
-                this._playNoise(ctx, 0.4, 0.3);
-                this._playTone(ctx, 80, 0.5, 'sawtooth', 0.25);
-                break;
-            case 'win':
-                this._playSequence(ctx, [523, 659, 784, 1047], 0.12, 'sine', 0.2);
-                break;
-            case 'chord':
-                this._playTone(ctx, 700, 0.1, 'triangle', 0.12);
-                this._playTone(ctx, 900, 0.1, 'triangle', 0.1);
-                break;
-            case 'click': this._playTone(ctx, 1000, 0.03, 'sine', 0.08); break;
-        }
-    }
-
-    private _playTone(ctx: AudioContext, freq: number, duration: number, type: OscillatorType, volume: number): void {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = type;
-        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-        gain.gain.setValueAtTime(0, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.005);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + duration);
-    }
-
-    private _playSequence(ctx: AudioContext, freqs: number[], noteDuration: number, type: OscillatorType, volume: number): void {
-        for (let i = 0; i < freqs.length; i++) {
-            const startTime = ctx.currentTime + i * noteDuration;
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = type;
-            osc.frequency.setValueAtTime(freqs[i], startTime);
-            gain.gain.setValueAtTime(0, startTime);
-            gain.gain.linearRampToValueAtTime(volume, startTime + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.001, startTime + noteDuration);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(startTime);
-            osc.stop(startTime + noteDuration);
-        }
-    }
-
-    private _playNoise(ctx: AudioContext, duration: number, volume: number): void {
-        const bufferSize = ctx.sampleRate * duration;
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
-        }
-        const noise = ctx.createBufferSource();
-        noise.buffer = buffer;
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(volume, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-        const filter = ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(800, ctx.currentTime);
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(ctx.destination);
-        noise.start(ctx.currentTime);
-        noise.stop(ctx.currentTime + duration);
+        const source = this._source;
+        const clip = this._clips[name];
+        if (!source || !clip) return;
+        source.playOneShot(clip, volume);
     }
 }

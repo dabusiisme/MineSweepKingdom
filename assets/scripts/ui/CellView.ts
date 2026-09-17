@@ -5,7 +5,7 @@
 import { _decorator, Component, Node, Sprite, Label, UITransform, tween, Vec3, Color, EventTouch, Layers } from "cc";
 import { Cell } from "../core/Cell";
 import { NUMBER_COLORS } from "../data/ConfigLoader";
-import { TextureFactory } from "./TextureFactory";
+import { TextureLibrary } from "./TextureLibrary";
 
 const { ccclass, property } = _decorator;
 
@@ -70,23 +70,20 @@ export class CellView extends Component {
         this.node.on(Node.EventType.TOUCH_CANCEL, this._onTouchCancel, this);
     }
 
-    /** 用运行时生成的图标贴图替换占位白图，失败则保留原样 */
+    /** 把图标贴图换掉占位白图，失败则保留原样 */
     private _useIcon(sprite: Sprite, kind: "flag" | "mine", size: number): void {
-        const sf = TextureFactory.icon(kind, size);
-        if (sf) {
-            sprite.spriteFrame = sf;
-            sprite.color = new Color(255, 255, 255, 255);
-        }
+        TextureLibrary.apply(sprite, kind === "flag" ? "icon_flag" : "icon_mine", size, size);
     }
 
     /** 未翻开=凸起，已翻开=凹陷；贴图生成失败时退回纯色 */
     private _applySkin(revealed: boolean): void {
         if (!this.bgSprite) return;
-        const sf = TextureFactory.cell(this._size, revealed ? "sunken" : "raised");
-        if (sf) {
-            this.bgSprite.spriteFrame = sf;
-            this.bgSprite.color = new Color(255, 255, 255, 255);
-        } else {
+        const ok = TextureLibrary.apply(
+            this.bgSprite,
+            revealed ? "cell_sunken" : "cell_raised",
+            this._size, this._size
+        );
+        if (!ok) {
             this.bgSprite.color = revealed
                 ? new Color(226, 234, 244, 255)
                 : new Color(198, 210, 226, 255);
