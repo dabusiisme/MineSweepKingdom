@@ -2,9 +2,10 @@
  * CellView 单个格子视图
  * 基于 Moodboard 治愈系风格
  */
-import { _decorator, Component, Node, Sprite, Label, UITransform, tween, Vec3, Color, EventTouch } from "cc";
+import { _decorator, Component, Node, Sprite, Label, UITransform, tween, Vec3, Color, EventTouch, Layers } from "cc";
 import { Cell } from "../core/Cell";
 import { NUMBER_COLORS } from "../data/ConfigLoader";
+import { TextureFactory } from "./TextureFactory";
 
 const { ccclass, property } = _decorator;
 
@@ -20,6 +21,7 @@ export class CellView extends Component {
     private _pressTimer: number | null = null;
     private _pressStartX: number = 0;
     private _pressStartY: number = 0;
+    private _size: number = 40;
     private _longPressTriggered: boolean = false;
     private _lastTapTime: number = 0;
     private static readonly LONG_PRESS_MS = 500;
@@ -32,20 +34,29 @@ export class CellView extends Component {
         this._cell = cell;
         this._row = row;
         this._col = col;
+        this._size = size;
+        // 统一到 UI_2D 层，保证和 HUD 的绘制顺序一致
+        const UI_2D = Layers.Enum.UI_2D;
+        this.node.walk(n => { n.layer = UI_2D; });
         const transform = this.node.getComponent(UITransform);
         if (transform) { transform.width = size; transform.height = size; }
         // 背景铺满整个格子
         if (this.bgSprite) {
+            this.bgSprite.sizeMode = Sprite.SizeMode.CUSTOM;
             const bgTransform = this.bgSprite.node.getComponent(UITransform);
             if (bgTransform) { bgTransform.width = size; bgTransform.height = size; }
         }
         // 旗子/地雷图标按格子比例缩放
         const iconSize = Math.max(12, Math.round(size * 0.75));
         if (this.flagSprite) {
+            this.flagSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+            this._useIcon(this.flagSprite, "flag", iconSize);
             const flagTransform = this.flagSprite.node.getComponent(UITransform);
             if (flagTransform) { flagTransform.width = iconSize; flagTransform.height = iconSize; }
         }
         if (this.mineSprite) {
+            this.mineSprite.sizeMode = Sprite.SizeMode.CUSTOM;
+            this._useIcon(this.mineSprite, "mine", iconSize);
             const mineTransform = this.mineSprite.node.getComponent(UITransform);
             if (mineTransform) { mineTransform.width = iconSize; mineTransform.height = iconSize; }
         }
@@ -58,13 +69,37 @@ export class CellView extends Component {
         this.node.on(Node.EventType.TOUCH_END, this._onTouchEnd, this);
         this.node.on(Node.EventType.TOUCH_CANCEL, this._onTouchCancel, this);
     }
+
+    /** 用运行时生成的图标贴图替换占位白图，失败则保留原样 */
+    private _useIcon(sprite: Sprite, kind: "flag" | "mine", size: number): void {
+        const sf = TextureFactory.icon(kind, size);
+        if (sf) {
+            sprite.spriteFrame = sf;
+            sprite.color = new Color(255, 255, 255, 255);
+        }
+    }
+
+    /** 未翻开=凸起，已翻开=凹陷；贴图生成失败时退回纯色 */
+    private _applySkin(revealed: boolean): void {
+        if (!this.bgSprite) return;
+        const sf = TextureFactory.cell(this._size, revealed ? "sunken" : "raised");
+        if (sf) {
+            this.bgSprite.spriteFrame = sf;
+            this.bgSprite.color = new Color(255, 255, 255, 255);
+        } else {
+            this.bgSprite.color = revealed
+                ? new Color(226, 234, 244, 255)
+                : new Color(198, 210, 226, 255);
+        }
+    }
+
     public updateView(): void {
         if (!this._cell) return;
         if (this.flagSprite) this.flagSprite.node.active = false;
         if (this.mineSprite) this.mineSprite.node.active = false;
         if (this.numberLabel) this.numberLabel.node.active = false;
+        this._applySkin(this._cell.isRevealed());
         if (this._cell.isRevealed()) {
-            if (this.bgSprite) this.bgSprite.color = new Color(250, 250, 252, 255);
             if (this._cell.adjacentMines > 0 && this.numberLabel) {
                 this.numberLabel.node.active = true;
                 this.numberLabel.color = new Color(NUMBER_COLORS[this._cell.adjacentMines]);
@@ -72,13 +107,10 @@ export class CellView extends Component {
             }
             if (this._cell.hasMine && this.mineSprite) {
                 this.mineSprite.node.active = true;
-                this.mineSprite.color = new Color(70, 74, 84, 255);
             }
         } else {
-            if (this.bgSprite) this.bgSprite.color = new Color(210, 214, 222, 255);
             if (this._cell.isFlagged() && this.flagSprite) {
                 this.flagSprite.node.active = true;
-                this.flagSprite.color = new Color(255, 96, 96, 255);
             }
         }
     }

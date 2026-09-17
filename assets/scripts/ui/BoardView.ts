@@ -14,6 +14,7 @@ export class BoardView extends Component {
     @property(Node) boardContainer: Node | null = null;
     private _board: Board | null = null;
     private _cellViews: CellView[][] = [];
+    private _inputEnabled: boolean = true;
     private _cellSize: number = 40;
     private _boardPixelWidth: number = 0;
     private _boardPixelHeight: number = 0;
@@ -21,13 +22,17 @@ export class BoardView extends Component {
     public get cellViews(): CellView[][] { return this._cellViews; }
     public get boardPixelWidth(): number { return this._boardPixelWidth; }
     public get boardPixelHeight(): number { return this._boardPixelHeight; }
+
+    /** 暂停时关掉棋盘交互 */
+    public setInputEnabled(enabled: boolean): void { this._inputEnabled = enabled; }
     public initBoard(board: Board, maxWidth: number, maxHeight: number): void {
         this._board = board;
         this._cellViews = [];
         if (this.boardContainer) this.boardContainer.destroyAllChildren();
         const cellSize = this._calculateCellSize(board.rows, board.cols, maxWidth, maxHeight);
         this._cellSize = cellSize;
-        const gap = 2;
+        // 不留缝：格子之间靠斜角分隔，留缝会露出背景形成细线
+        const gap = 0;
         const containerWidth = board.cols * (cellSize + gap) - gap;
         const containerHeight = board.rows * (cellSize + gap) - gap;
         this._boardPixelWidth = containerWidth;
@@ -45,7 +50,7 @@ export class BoardView extends Component {
         }
     }
     private _calculateCellSize(rows: number, cols: number, maxWidth: number, maxHeight: number): number {
-        const gap = 2;
+        const gap = 0;
         const maxByWidth = Math.floor((maxWidth - (cols - 1) * gap) / cols);
         const maxByHeight = Math.floor((maxHeight - (rows - 1) * gap) / rows);
         return Math.max(20, Math.min(maxByWidth, maxByHeight, 60));
@@ -67,14 +72,17 @@ export class BoardView extends Component {
         return cellView!;
     }
     private _onCellReveal(event: any): void {
+        if (!this._inputEnabled) return;
         const { row, col } = event;
         this.node.emit("board.reveal", { row, col });
     }
     private _onCellFlag(event: any): void {
+        if (!this._inputEnabled) return;
         const { row, col } = event;
         this.node.emit("board.flag", { row, col });
     }
     private _onCellChord(event: any): void {
+        if (!this._inputEnabled) return;
         const { row, col } = event;
         this.node.emit("board.chord", { row, col });
     }
