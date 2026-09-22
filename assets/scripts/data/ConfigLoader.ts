@@ -1,6 +1,10 @@
 /**
  * ConfigLoader 难度配置加载器
  * v0.2 4 档难度（与需求文档 2.1 对齐）
+ *
+ * 棋盘一律做成"竖着的"（行数 > 列数），因为游戏是竖屏的：
+ * 屏幕可用的高度大约是宽度的 1.6 倍，方形或横着的棋盘会白白浪费下半屏。
+ * 雷的密度沿用了经典扫雷的比例（简单 12.5% / 中等 15.8% / 困难 20.6% / 地狱 22.2%）。
  */
 import { DifficultyConfig } from './types';
 
@@ -8,34 +12,38 @@ export const DIFFICULTY_CONFIGS: Record<string, DifficultyConfig> = {
     easy: {
         id: 'easy',
         name: '简单',
-        rows: 9,
-        cols: 9,
-        mineCount: 10,
+        rows: 12,
+        cols: 8,
+        mineCount: 12,
         difficulty: 1.0,
+        starSec: 60,
     },
     medium: {
         id: 'medium',
         name: '中等',
-        rows: 16,
-        cols: 16,
-        mineCount: 40,
+        rows: 20,
+        cols: 12,
+        mineCount: 38,
         difficulty: 1.6,
+        starSec: 150,
     },
     hard: {
         id: 'hard',
         name: '困难',
-        rows: 16,
-        cols: 30,
-        mineCount: 99,
+        rows: 24,
+        cols: 16,
+        mineCount: 79,
         difficulty: 2.4,
+        starSec: 300,
     },
     hell: {
         id: 'hell',
         name: '地狱',
-        rows: 30,
-        cols: 30,
-        mineCount: 200,
+        rows: 32,
+        cols: 20,
+        mineCount: 142,
         difficulty: 3.5,
+        starSec: 600,
     },
 };
 

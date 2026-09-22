@@ -24,7 +24,8 @@ export class CellView extends Component {
     private _size: number = 40;
     private _longPressTriggered: boolean = false;
     private _lastTapTime: number = 0;
-    private static readonly LONG_PRESS_MS = 500;
+    /** 长按插旗：需求文档定的是 0.3s，太长会明显拖慢翻格节奏 */
+    private static readonly LONG_PRESS_MS = 300;
     private static readonly MOVE_THRESHOLD = 15;
     private static readonly DOUBLE_TAP_MS = 300;
     public get cell(): Cell | null { return this._cell; }
@@ -78,9 +79,14 @@ export class CellView extends Component {
     /** 未翻开=凸起，已翻开=凹陷；贴图生成失败时退回纯色 */
     private _applySkin(revealed: boolean): void {
         if (!this.bgSprite) return;
+        const tex = revealed ? "cell_sunken" : "cell_raised";
+        // 贴图没变就直接返回：BattleScene 每次点格子都会 updateAllCells() 遍历全部格子，
+        // 不判一下的话一次点击就要写几百次属性。
+        const sf = TextureLibrary.get(tex);
+        if (sf && this.bgSprite.spriteFrame === sf) return;
         const ok = TextureLibrary.apply(
             this.bgSprite,
-            revealed ? "cell_sunken" : "cell_raised",
+            tex,
             this._size, this._size
         );
         if (!ok) {

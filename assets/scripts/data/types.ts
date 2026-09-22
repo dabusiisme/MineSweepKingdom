@@ -25,6 +25,7 @@ export interface DifficultyConfig {
     mineCount: number;
     timeLimit?: number;       // 秒，undefined = 不限时
     difficulty: number;       // 难度系数
+    starSec: number;          // 三星基准时间（秒）；1.5 倍以内是两星，再慢就是一星
 }
 
 /** 单步操作（用于撤销/回放） */

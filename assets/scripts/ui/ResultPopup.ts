@@ -2,10 +2,21 @@
  * ResultPopup 结算弹窗
  * 1~3 星 + 战绩 + 再来一局
  */
-import { _decorator, Component, Node, Label, Sprite, tween, Vec3, UIOpacity, Layers, UITransform, Color } from "cc";
+import { _decorator, Component, Node, Label, Sprite, tween, Vec3, UIOpacity, Layers, UITransform, Color, view } from "cc";
 import { TextureLibrary } from "./TextureLibrary";
 import { AudioManager } from "../core/AudioManager";
+import { fitPanelWidth } from "./UiLayout";
 const { ccclass, property } = _decorator;
+
+/**
+ * 结算面板底板的不透明度。
+ * 留一点点透，能隐约看到后面已经翻开的棋盘（尤其是踩雷那局摊开的雷），
+ * 但不能太低——字和按钮要压得住背景。
+ */
+const PANEL_ALPHA = 200;
+
+/** 弹窗后面那层遮罩的颜色和浓度，和其他几个弹层保持一致 */
+const MASK_COLOR = new Color(30, 34, 44, 190);
 
 @ccclass("ResultPopup")
 export class ResultPopup extends Component {
@@ -15,8 +26,16 @@ export class ResultPopup extends Component {
     @property([Node]) starNodes: Node[] = [];
     @property(Node) retryBtn: Node | null = null;
     @property(Node) homeBtn: Node | null = null;
+    @property(Node) statsBtn: Node | null = null;
+    /**
+     * 注意：这里绑定的是**节点**不是 Label 组件。
+     * 编辑器里绑属性时用的是 propertyType="node"（传的也是节点 uuid），
+     * 如果类型写成 Label，拿到的其实是 Node，再取 `.node` 就是 undefined。
+     */
+    @property(Node) newRecordLabel: Node | null = null;
     public onRetry?: () => void;
     public onHome?: () => void;
+    public onStats?: () => void;
 
     onLoad() {
         this._fixLayer();
@@ -34,16 +53,33 @@ export class ResultPopup extends Component {
 
     /** 修正被 TRIMMED 压成 4x4 的按钮和星星尺寸 */
     private _fixSizes(): void {
+        // 遮罩铺满可见区域（不同机型能见宽度不一样，不能写死 750）
+        const mask = this.node.getChildByName("Mask");
+        if (mask) {
+            const ms = mask.getComponent(Sprite);
+            if (ms) {
+                const visible = view.getVisibleSize();
+                if (TextureLibrary.apply(ms, "white", visible.width, visible.height)) {
+                    ms.color = MASK_COLOR.clone();
+                }
+            }
+        }
+
         // 面板换成圆角 + 投影的立体底板
         const panel = this.node.getChildByName("PanelBG");
         if (panel) {
+            // 先按可见宽度收一遍，再按最终尺寸贴图（否则窄屏上会左右溢出）
+            fitPanelWidth(this.node, 600);
             const ptf = panel.getComponent(UITransform);
             const pw = ptf?.width ?? 600, ph = ptf?.height ?? 400;
             if (ptf) ptf.setContentSize(pw, ph);
             const ps = panel.getComponent(Sprite);
             if (ps) {
                 if (!TextureLibrary.apply(ps, "panel", pw, ph)) {
-                    ps.color = new Color(250, 247, 238, 255);
+                    ps.color = new Color(250, 247, 238, PANEL_ALPHA);
+                } else {
+                    // apply 里会把颜色重置成不透明白色，这里再压上透明度
+                    ps.color = new Color(255, 255, 255, PANEL_ALPHA);
                 }
             }
         }
@@ -60,8 +96,20 @@ export class ResultPopup extends Component {
                 }
             }
         }
-        this._styleButton(this.retryBtn, 120, 56, -110);
-        this._styleButton(this.homeBtn, 120, 56, 110);
+        // 三个按钮并排：再来一局 / 查看战绩 / 返回主页
+        this._styleButton(this.retryBtn, 160, 56, -175, true);
+        this._styleButton(this.statsBtn, 160, 56, 0, false);
+        this._styleButton(this.homeBtn, 160, 56, 175, false);
+
+        if (this.newRecordLabel) {
+            this.newRecordLabel.setPosition(0, 100, 0);
+            const rec = this.newRecordLabel.getComponent(Label);
+            if (rec) {
+                rec.fontSize = 26;
+                rec.lineHeight = 32;
+                rec.color = new Color(232, 150, 40, 255);
+            }
+        }
 
         const styleTitle = (label: Label | null, size: number, y: number) => {
             if (!label) return;
@@ -70,9 +118,9 @@ export class ResultPopup extends Component {
             label.color = new Color(58, 58, 74, 255);
             label.node.setPosition(0, y, 0);
         };
-        styleTitle(this.titleLabel, 40, 130);
-        styleTitle(this.durationLabel, 30, 60);
-        styleTitle(this.difficultyLabel, 26, 10);
+        styleTitle(this.titleLabel, 40, 150);
+        styleTitle(this.durationLabel, 30, 45);
+        styleTitle(this.difficultyLabel, 26, 0);
 
         // 星星排成一行
         const n = this.starNodes.length;
@@ -81,42 +129,41 @@ export class ResultPopup extends Component {
         });
     }
 
-    private _styleButton(btn: Node | null, w: number, h: number, x: number): void {
+    private _styleButton(btn: Node | null, w: number, h: number, x: number, primary: boolean): void {
         if (!btn) return;
         btn.setPosition(x, -140, 0);
         const tf = btn.getComponent(UITransform);
         if (tf) tf.setContentSize(w, h);
         const sprite = btn.getComponent(Sprite);
         if (sprite) {
-            if (!TextureLibrary.apply(sprite, "button_primary", w, h)) {
+            // 主操作（再来一局）用高亮色，另外两个用普通色
+            const tex = primary ? "button_primary" : "button_neutral";
+            if (!TextureLibrary.apply(sprite, tex, w, h)) {
                 sprite.color = new Color(196, 224, 240, 255);
             }
         }
         const label = btn.getComponentInChildren(Label);
         if (label) {
-            label.fontSize = 26;
-            label.lineHeight = 30;
+            label.fontSize = 24;
+            label.lineHeight = 28;
             label.color = new Color(58, 58, 74, 255);
             label.node.setPosition(0, 0, 0);
         }
     }
 
-    public show(win: boolean, duration: number, difficulty: string, flagsUsed: number): void {
+    public show(win: boolean, duration: number, difficulty: string, flagsUsed: number,
+                stars: number = 0, isNewRecord: boolean = false): void {
         this.node.active = true;
         this._fixLayer();
         this._fixSizes();
         if (this.titleLabel) this.titleLabel.string = win ? "🎉 通关啦~" : "💥 差一点哦~";
         if (this.durationLabel) this.durationLabel.string = "⏱️ " + this._formatTime(duration);
         if (this.difficultyLabel) this.difficultyLabel.string = "难度：" + difficulty + "  🚩 旗帜：" + flagsUsed;
-        const stars = win ? this._calculateStars(duration, difficulty) : 0;
-        this._showStars(stars);
+        // 新纪录角标：只有真的破了自己的最好成绩才显示
+        if (this.newRecordLabel) this.newRecordLabel.active = isNewRecord;
+        // 星级由 BattleScene 用 data/Scoring 统一算好后传进来，这里只负责显示
+        this._showStars(win ? stars : 0);
         this._playShowAnimation();
-    }
-
-    private _calculateStars(duration: number, _difficulty: string): number {
-        if (duration < 60) return 3;
-        if (duration < 180) return 2;
-        return 1;
     }
 
     private _showStars(count: number): void {
@@ -153,5 +200,6 @@ export class ResultPopup extends Component {
 
     onRetryClicked() { AudioManager.play("click"); this.onRetry?.(); this.hide(); }
     onHomeClicked() { AudioManager.play("click"); this.onHome?.(); this.hide(); }
+    onStatsClicked() { AudioManager.play("click"); this.onStats?.(); this.hide(); }
     public hide(): void { this.node.active = false; }
 }
